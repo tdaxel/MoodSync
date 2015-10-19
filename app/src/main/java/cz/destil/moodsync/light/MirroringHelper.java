@@ -20,6 +20,8 @@ import java.nio.ByteBuffer;
 import cz.destil.moodsync.core.App;
 import cz.destil.moodsync.core.BaseAsyncTask;
 import cz.destil.moodsync.core.Config;
+import cz.destil.moodsync.core.GroupConfiguration;
+import cz.destil.moodsync.core.ScreenCapturePlacements;
 
 /**
  * Helper class which deals with Media Projection.
@@ -79,7 +81,7 @@ public class MirroringHelper {
         mMediaProjection = mProjectionManager.getMediaProjection(resultCode, data);
     }
 
-    public void getLatestBitmap(final Listener listener) {
+    public void getLatestBitmap(final GroupConfiguration groupConfiguration, final Listener listener) {
         mImageReader = ImageReader.newInstance(Config.VIRTUAL_DISPLAY_WIDTH, Config.VIRTUAL_DISPLAY_HEIGHT, PixelFormat.RGBA_8888, 5);
         mVirtualDisplay = createVirtualDisplay();
         mVirtualDisplay.setSurface(mImageReader.getSurface());
@@ -95,17 +97,16 @@ public class MirroringHelper {
                     public void inBackground() {
                         try {
                             Image img = mImageReader.acquireLatestImage();
-                            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+
                             final Image.Plane[] planes = img.getPlanes();
                             final ByteBuffer buffer = (ByteBuffer) planes[0].getBuffer().rewind();
-                            bitmap = Bitmap.createBitmap(img.getWidth(), img.getHeight(), Bitmap.Config.ARGB_8888);
-                            bitmap.copyPixelsFromBuffer(buffer);
-                            bitmap.compress(Bitmap.CompressFormat.PNG, 100, bos);
-                            bos.close();
+                            bitmap = createSubBitmapWithSpecificConfiguration(img, buffer, groupConfiguration);
+
                             img.close();
                             mImageReader.close();
                             mVirtualDisplay.release();
                         } catch (IOException ignored) {
+                            System.err.println("mistake " +ignored.getLocalizedMessage());
                         }
                     }
 
@@ -116,6 +117,43 @@ public class MirroringHelper {
                 }.start();
             }
         }, null);
+    }
+
+    private Bitmap createSubBitmapWithSpecificConfiguration(Image img, ByteBuffer buffer, GroupConfiguration groupConfiguration) throws IOException {
+        Bitmap bitmap = null;
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+
+        final ScreenCapturePlacements screenCapturePlacement = groupConfiguration.getScreenCapturePlacement();
+        Bitmap fullImage = Bitmap.createBitmap(img.getWidth(), img.getHeight(), Bitmap.Config.ARGB_8888);
+
+        switch (screenCapturePlacement) {
+
+            case LEFT:
+                bitmap = Bitmap.createBitmap(fullImage,0,0,img.getWidth()/2,img.getHeight());
+                break;
+            case TOP:
+                //remember to change this
+                bitmap = Bitmap.createBitmap(img.getWidth(), img.getHeight(), Bitmap.Config.ARGB_8888);
+                break;
+            case RIGHT:
+                bitmap = Bitmap.createBitmap(fullImage,0,img.getWidth()/2,img.getWidth(),img.getHeight());
+                break;
+            case BOTTOM:
+                //remember to change this
+                bitmap = Bitmap.createBitmap(img.getWidth(), img.getHeight(), Bitmap.Config.ARGB_8888);
+                break;
+            case ALLOFTHESCREEN:
+                //we already have full picture
+                bitmap = fullImage;
+                break;
+        }
+
+
+        bitmap.copyPixelsFromBuffer(buffer);
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, bos);
+        bos.close();
+
+        return bitmap;
     }
 
     public interface Listener {

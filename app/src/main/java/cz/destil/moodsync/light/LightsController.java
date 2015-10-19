@@ -2,15 +2,19 @@ package cz.destil.moodsync.light;
 
 import android.graphics.Color;
 
+import java.util.List;
+
 import cz.destil.moodsync.R;
 import cz.destil.moodsync.core.App;
 import cz.destil.moodsync.core.BaseAsyncTask;
 import cz.destil.moodsync.core.Config;
+import cz.destil.moodsync.core.GroupConfiguration;
 import cz.destil.moodsync.event.ErrorEvent;
 import cz.destil.moodsync.event.SuccessEvent;
 import cz.destil.moodsync.util.Toas;
 import lifx.java.android.client.LFXClient;
 import lifx.java.android.entities.LFXHSBKColor;
+import lifx.java.android.entities.LFXLightTarget;
 import lifx.java.android.entities.LFXTypes;
 import lifx.java.android.light.LFXTaggedLightCollection;
 import lifx.java.android.network_context.LFXNetworkContext;
@@ -27,7 +31,6 @@ public class LightsController {
     private LFXNetworkContext mNetworkContext;
     private boolean mWorkingFine;
     private boolean mDisconnected;
-    private int mPreviousColor = -1;
 
     public static LightsController get() {
         if (sInstance == null) {
@@ -36,10 +39,25 @@ public class LightsController {
         return sInstance;
     }
 
-    public void changeColor(int color) {
-        if (mWorkingFine && color != mPreviousColor) {
-            mNetworkContext.getAllLightsCollection().setColorOverDuration(convertColor(color), Config.DURATION_OF_COLOR_CHANGE);
-            mPreviousColor = color;
+    public void changeColor(int color, GroupConfiguration groupConfiguration) {
+        if (mWorkingFine && color != groupConfiguration.getPreviousColor()) {
+            List<String> lamps = groupConfiguration.getLamps();
+            if(lamps == null || lamps == GroupConfiguration.USEALLLAMPS)
+            {
+                mNetworkContext.getAllLightsCollection().setColorOverDuration(convertColor(color, groupConfiguration), Config.DURATION_OF_COLOR_CHANGE);
+                groupConfiguration.setPreviousColor(color);
+            }
+            else
+            {
+                //Set all lamps (this need testing.
+                for (String lampLabel: lamps )
+                {
+                    mNetworkContext.getAllLightsCollection().getLightsForLabel(lampLabel).get(0).setColorOverDuration(convertColor(color,groupConfiguration), Config.DURATION_OF_COLOR_CHANGE);
+                    groupConfiguration.setPreviousColor(color);
+                }
+            }
+
+
         }
     }
 
@@ -95,15 +113,20 @@ public class LightsController {
         }
     }
 
-    private LFXHSBKColor convertColor(int color) {
+    private LFXHSBKColor convertColor(int color, GroupConfiguration groupConfiguration) {
         float[] hsv = new float[3];
         Color.colorToHSV(color, hsv);
-        return LFXHSBKColor.getColor(hsv[0], hsv[1], Config.LIFX_BRIGHTNESS, 3500);
+        return LFXHSBKColor.getColor(hsv[0], hsv[1], groupConfiguration.getBrightness(), 3500);
+    }
+    private LFXHSBKColor convertColorOld(int color) {
+        float[] hsv = new float[3];
+        Color.colorToHSV(color, hsv);
+        return LFXHSBKColor.getColor(hsv[0], hsv[1], Config.LIFX_BRIGHTNESS_Default, 3500);
     }
 
     public void signalStop() {
         int color = App.get().getResources().getColor(android.R.color.white);
-        mNetworkContext.getAllLightsCollection().setColorOverDuration(convertColor(color), 100);
+        mNetworkContext.getAllLightsCollection().setColorOverDuration(convertColorOld(color), 100);
     }
 
     class TimeoutTask extends BaseAsyncTask {
@@ -119,7 +142,9 @@ public class LightsController {
         @Override
         public void postExecute() {
             int numLights = mNetworkContext.getAllLightsCollection().getLights().size();
-            if (numLights == 0 || mDisconnected) {
+
+            // TODO AXEL remember was == 0;
+            if (numLights != 0 || mDisconnected) {
                 App.bus().post(new ErrorEvent(R.string.no_lights_found));
             } else {
                 startRocking();

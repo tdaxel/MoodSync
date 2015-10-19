@@ -6,6 +6,7 @@ import android.support.v7.graphics.Palette;
 import cz.destil.moodsync.R;
 import cz.destil.moodsync.core.App;
 import cz.destil.moodsync.core.Config;
+import cz.destil.moodsync.core.GroupConfiguration;
 import cz.destil.moodsync.util.SleepTask;
 
 /**
@@ -26,19 +27,19 @@ public class ColorExtractor {
         return sInstance;
     }
 
-    public void start(final MirroringHelper mirroring, final Listener listener) {
+    public void start(final MirroringHelper mirroring, final GroupConfiguration groupConfiguration, final Listener listener) {
         mRunning = true;
         new SleepTask(Config.INITIAL_DELAY, new SleepTask.Listener() {
             @Override
             public void awoken() {
-                extractBitmap(mirroring, listener);
+                extractBitmap(mirroring,groupConfiguration, listener);
             }
         }).start();
     }
 
-    private void extractBitmap(final MirroringHelper mirroring, final Listener listener) {
+    private void extractBitmap(final MirroringHelper mirroring, final GroupConfiguration groupConfiguration, final Listener listener) {
         if (mRunning) {
-            mirroring.getLatestBitmap(new MirroringHelper.Listener() {
+            mirroring.getLatestBitmap(groupConfiguration,new MirroringHelper.Listener() {
                 @Override
                 public void onBitmapAvailable(final Bitmap bitmap) {
                     Palette.generateAsync(bitmap, 25, new Palette.PaletteAsyncListener() {
@@ -51,7 +52,7 @@ public class ColorExtractor {
                             new SleepTask(Config.FREQUENCE_OF_SCREENSHOTS, new SleepTask.Listener() {
                                 @Override
                                 public void awoken() {
-                                    extractBitmap(mirroring, listener);
+                                    extractBitmap(mirroring, groupConfiguration,listener);
                                 }
                             }).start();
                         }

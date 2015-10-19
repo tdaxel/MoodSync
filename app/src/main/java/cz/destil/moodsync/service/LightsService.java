@@ -10,10 +10,15 @@ import android.os.IBinder;
 
 import com.squareup.otto.Subscribe;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+
 import cz.destil.moodsync.R;
 import cz.destil.moodsync.activity.MainActivity;
 import cz.destil.moodsync.core.App;
 import cz.destil.moodsync.core.Config;
+import cz.destil.moodsync.core.GroupConfiguration;
+import cz.destil.moodsync.core.ScreenCapturePlacements;
 import cz.destil.moodsync.event.LocalColorEvent;
 import cz.destil.moodsync.light.ColorExtractor;
 import cz.destil.moodsync.light.LightsController;
@@ -79,21 +84,38 @@ public class LightsService extends Service {
         mMulticastLock = wifi.createMulticastLock("lifx");
         mMulticastLock.acquire();
 
+
+        //TODO this should be read from a config file.
+        ArrayList<GroupConfiguration> groupConfigurationArrayList = new ArrayList<GroupConfiguration>();
+        groupConfigurationArrayList.add(new GroupConfiguration("TEST NAME",-1,ScreenCapturePlacements.LEFT,new ArrayList<String>(Arrays.asList("Stue"))));
+        groupConfigurationArrayList.add(new GroupConfiguration("TEST NAME2",-1, ScreenCapturePlacements.RIGHT,GroupConfiguration.USEALLLAMPS));
+
         mLights.start();
-        mColorExtractor.start(mMirroring, new ColorExtractor.Listener() {
-            @Override
-            public void onColorExtracted(int color) {
-                if (!mLocalSwitcher.isRunning()) {
-                    mLights.changeColor(color);
+
+
+
+
+        for (final GroupConfiguration gp:groupConfigurationArrayList)
+        {
+            mColorExtractor.start(mMirroring,gp, new ColorExtractor.Listener() {
+                @Override
+                public void onColorExtracted(int color) {
+                    if (!mLocalSwitcher.isRunning()) {
+                        mLights.changeColor(color,gp);
+                    }
                 }
-            }
-        });
+            });
+        }
+
     }
 
     private void stop() {
         mColorExtractor.stop();
         mMirroring.stop();
         mLights.signalStop();
+
+        //TODO STOP ALL THE GROUPS INDIVIDUAL.
+
         new SleepTask(Config.FINAL_DELAY, new SleepTask.Listener() {
             @Override
             public void awoken() {
@@ -109,6 +131,9 @@ public class LightsService extends Service {
 
     @Subscribe
     public void onNewLocalColor(LocalColorEvent event) {
-        mLights.changeColor(event.newColor);
+
+        System.out.println(event);
+        System.out.println("never here?");
+        //mLights.changeColor(event.newColor, gp);
     }
 }
